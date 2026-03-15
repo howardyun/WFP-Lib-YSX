@@ -5,6 +5,8 @@
 <br><br>
 </p>
 
+**[News]** Our paper on enhancing website fingerprinting adaptability to traffic drift has been accepted by NDSS 2026. Code: https://github.com/Xinhao-Deng/Adaptive-WF-Attack
+
 
 WFlib is a Pytorch-based open-source library for website fingerprinting attacks, intended for research purposes only.
 
