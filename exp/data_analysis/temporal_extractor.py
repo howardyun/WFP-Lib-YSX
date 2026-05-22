@@ -35,7 +35,7 @@ if not os.path.exists(out_file):
     print("Shape of temporal_X:", temporal_X.shape)
     
     # Save the extracted features and labels to the output file
-    np.savez(out_file, X=temporal_X, y=y)
+    np.savez(out_file, X=temporal_X, y=np.asarray(y))
 else:
     # If the output file already exists, print a message indicating it has been generated
     print(f"{out_file} has been generated.")

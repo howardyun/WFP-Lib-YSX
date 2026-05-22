@@ -5,6 +5,10 @@ import argparse
 import numpy as np
 from tqdm import tqdm
 import random
+import shutil
+import zipfile
+
+from WFlib.tools import data_processor
 
 def gen_augment(data, num_aug, effective_ranges, out_file):
     """
@@ -72,7 +76,7 @@ args = parser.parse_args()
 
 # Construct the input path for the dataset
 in_path = os.path.join("./datasets", args.dataset)
-data = np.load(os.path.join(in_path, f"{args.in_file}.npz"))
+data = data_processor.open_npz_as_mmap(os.path.join(in_path, f"{args.in_file}.npz"))
 
 # Load the temporal attribution data
 temporal_data = np.load(os.path.join(args.checkpoints, args.dataset, args.model, f"attr_{args.attr_method}.npz"))["attr_values"]
@@ -91,8 +95,46 @@ out_file = os.path.join(in_path, f"aug_{args.in_file}.npz")
 
 # Check if the output file already exists
 if not os.path.exists(out_file):
-    # Generate augmented data and save it to the output file
-    gen_augment(data, 2, effective_ranges, out_file)
+    X, y = data
+    tmp_dir = f"{out_file}.tmp"
+    os.makedirs(tmp_dir, exist_ok=True)
+    X_path = os.path.join(tmp_dir, "X.npy")
+    y_path = os.path.join(tmp_dir, "y.npy")
+    total = X.shape[0] * 3
+    feat_length = X.shape[1]
+    X_out = np.lib.format.open_memmap(X_path, mode="w+", dtype=X.dtype, shape=(total, feat_length))
+    y_out = np.lib.format.open_memmap(y_path, mode="w+", dtype=y.dtype, shape=(total,))
+
+    out_idx = 0
+    for index in tqdm(range(X.shape[0]), desc=f"aug_{args.in_file}"):
+        row = X[index]
+        cur_web = int(y[index])
+        abs_row = np.absolute(row)
+        loading_time = abs_row.max()
+        for _ in range(2):
+            p = np.random.randint(effective_ranges[cur_web][0], effective_ranges[cur_web][1])
+            threshold = loading_time * p / 100
+            valid_X = abs_row[abs_row > 0]
+            valid_X = valid_X[valid_X <= threshold]
+            valid_length = valid_X.shape[0]
+            aug_row = np.pad(row[:valid_length], (0, feat_length - valid_length), "constant", constant_values=(0, 0))
+            X_out[out_idx] = aug_row
+            y_out[out_idx] = cur_web
+            out_idx += 1
+
+        X_out[out_idx] = row
+        y_out[out_idx] = cur_web
+        out_idx += 1
+
+    X_out.flush()
+    y_out.flush()
+    del X_out, y_out
+
+    with zipfile.ZipFile(out_file, "w", compression=zipfile.ZIP_STORED) as zf:
+        zf.write(X_path, "X.npy")
+        zf.write(y_path, "y.npy")
+    shutil.rmtree(tmp_dir)
+    print(f"Generate {out_file} done.")
 else:
     # If the output file already exists, print a message indicating it has been generated
     print(f"{out_file} has been generated.")

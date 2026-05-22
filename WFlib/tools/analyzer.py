@@ -3,7 +3,7 @@ from tqdm import tqdm
 import torch
 import numpy as np
 
-def feature_attr(model, attr_method, X, y, num_classes):
+def feature_attr(model, attr_method, X, y, num_classes, bg_samples=2, test_samples=10):
     """
     Calculate feature attributions for a given model using a specified attribution method.
     
@@ -32,9 +32,9 @@ def feature_attr(model, attr_method, X, y, num_classes):
     test_traffic = {}
     for web in range(num_classes):
         bg_test_X = X[y == web]
-        assert bg_test_X.shape[0] >= 12
-        bg_traffic.append(bg_test_X[0:2])  # Use the first 2 samples as background
-        test_traffic[web] = bg_test_X[2:12]  # Use the next 10 samples for testing
+        assert bg_test_X.shape[0] >= bg_samples + test_samples
+        bg_traffic.append(bg_test_X[0:bg_samples])
+        test_traffic[web] = bg_test_X[bg_samples:bg_samples + test_samples]
 
     # Concatenate all background traffic into a single tensor
     bg_traffic = torch.concat(bg_traffic, axis=0)

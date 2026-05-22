@@ -166,3 +166,15 @@ checkpoints
 logs
 tmp_files
 analysis
+defence_datasets/
+defence_datesets/OW_Org/test.npz.mmap/X.npy
+defence_datesets/OW_Org/test.npz.mmap/y.npy
+defence_datesets/OW_Org/valid.npz.mmap/X.npy
+defence_datesets/OW_Org/valid.npz.mmap/y.npy
+defence_datesets/OW_Tamaraw/test.npz
+defence_datesets/OW_Tamaraw/train.npz
+defence_datesets/OW_Tamaraw/valid.npz
+defence_datesets/OW_Tamaraw/test.npz.mmap/X.npy
+defence_datesets/OW_Tamaraw/test.npz.mmap/y.npy
+defence_datesets/OW_Org/test.npz
+defence_datesets/OW_Org/valid.npz

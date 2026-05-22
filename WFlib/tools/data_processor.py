@@ -1,7 +1,12 @@
+import os
+import shutil
 import torch
+import zipfile
 import numpy as np
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
+
+LAZY_LOAD_THRESHOLD = 512 * 1024 * 1024
 
 def length_align(X, seq_len):
     """
@@ -22,6 +27,109 @@ def length_align(X, seq_len):
         X = np.pad(X, pad_width=pad_width, mode="constant", constant_values=0)  # Pad the sequence with zeros
     return X
 
+def extract_npz_member(npz_file, member, out_path):
+    # Extract one .npy member from .npz so numpy can mmap it instead of
+    # loading the full array into memory.
+    if os.path.exists(out_path):
+        return
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with zipfile.ZipFile(npz_file) as zf:
+        with zf.open(member) as src, open(out_path, "wb") as dst:
+            shutil.copyfileobj(src, dst, length=1024 * 1024 * 16)
+
+def open_npz_as_mmap(data_path):
+    cache_dir = f"{data_path}.mmap"
+    X_file = os.path.join(cache_dir, "X.npy")
+    y_file = os.path.join(cache_dir, "y.npy")
+    if os.path.isdir(data_path):
+        X_file = os.path.join(data_path, "X.npy")
+        y_file = os.path.join(data_path, "y.npy")
+        return np.load(X_file, mmap_mode="r"), np.load(y_file, mmap_mode="r")
+
+    if os.path.isdir(cache_dir) and os.path.exists(data_path):
+        cache_mtime = max(
+            os.path.getmtime(X_file) if os.path.exists(X_file) else 0,
+            os.path.getmtime(y_file) if os.path.exists(y_file) else 0,
+        )
+        if os.path.getmtime(data_path) > cache_mtime:
+            shutil.rmtree(cache_dir, ignore_errors=True)
+
+    try:
+        extract_npz_member(data_path, "X.npy", X_file)
+        extract_npz_member(data_path, "y.npy", y_file)
+    except zipfile.BadZipFile:
+        tmp_dir = f"{data_path}.tmp"
+        X_file = os.path.join(tmp_dir, "X.npy")
+        y_file = os.path.join(tmp_dir, "y.npy")
+        if not os.path.exists(X_file) or not os.path.exists(y_file):
+            raise
+    return np.load(X_file, mmap_mode="r"), np.load(y_file, mmap_mode="r")
+
+def align_sequence(sequence, seq_len):
+    sequence = sequence[..., :seq_len]
+    if seq_len > sequence.shape[-1]:
+        pad_width = [(0, 0) for _ in range(len(sequence.shape) - 1)]
+        pad_width.append((0, seq_len - sequence.shape[-1]))
+        sequence = np.pad(sequence, pad_width=pad_width, mode="constant", constant_values=0)
+    return sequence
+
+class LazyFeatureArray:
+    def __init__(self, data_path, feature_type, seq_len):
+        self.X, self.y = open_npz_as_mmap(data_path)
+        self.feature_type = feature_type
+        self.seq_len = seq_len
+        self.shape = self._feature_shape()
+
+    def _feature_shape(self):
+        base_shape = self.X.shape[:-1] + (min(self.seq_len, self.X.shape[-1]),)
+        if self.seq_len > self.X.shape[-1]:
+            base_shape = self.X.shape[:-1] + (self.seq_len,)
+        if self.feature_type in ["DIR", "DT", "TAM"]:
+            return (self.X.shape[0], 1) + base_shape[1:]
+        if self.feature_type == "DT2":
+            return (self.X.shape[0], 2, self.seq_len)
+        return base_shape
+
+    def __len__(self):
+        return self.X.shape[0]
+
+    def get_feature(self, index):
+        row = self.X[index]
+        if self.feature_type == "DIR":
+            row = np.sign(align_sequence(row, self.seq_len))
+            return row[np.newaxis].astype(np.float32, copy=True)
+        if self.feature_type == "DT":
+            row = align_sequence(row, self.seq_len)
+            return row[np.newaxis].astype(np.float32, copy=True)
+        if self.feature_type == "DT2":
+            row_dir = np.sign(row)
+            row_time = np.abs(row)
+            row_time = np.diff(row_time)
+            row_time[row_time < 0] = 0
+            row_dir = align_sequence(row_dir, self.seq_len)
+            row_time = align_sequence(row_time, self.seq_len)
+            return np.stack([row_dir, row_time]).astype(np.float32, copy=True)
+        if self.feature_type == "TAM":
+            row = align_sequence(row, self.seq_len)
+            return row[np.newaxis].astype(np.float32, copy=True)
+        if self.feature_type in ["TAF", "MTAF"]:
+            row = align_sequence(row, self.seq_len)
+            return row.astype(np.float32, copy=True)
+        if self.feature_type == "Origin":
+            return align_sequence(row, self.seq_len)
+        raise ValueError(f"Feature type {self.feature_type} is not matched.")
+
+class LazyTensorDataset(torch.utils.data.Dataset):
+    def __init__(self, X, y):
+        self.X = X
+        self.y = y
+
+    def __len__(self):
+        return len(self.X)
+
+    def __getitem__(self, index):
+        return torch.from_numpy(self.X.get_feature(index)), self.y[index]
+
 def load_data(data_path, feature_type, seq_len, num_tab=1):
     """
     Load and process data from a specified path.
@@ -34,6 +142,14 @@ def load_data(data_path, feature_type, seq_len, num_tab=1):
     Returns:
     tuple: Processed feature tensor and label tensor.
     """
+    if os.path.getsize(data_path) >= LAZY_LOAD_THRESHOLD:
+        X = LazyFeatureArray(data_path, feature_type, seq_len)
+        if num_tab == 1:
+            y = torch.tensor(X.y, dtype=torch.int64)
+        else:
+            y = torch.tensor(X.y, dtype=torch.float32)
+        return X, y
+
     data = np.load(data_path)
     X = data["X"]
     y = data["y"]
@@ -96,21 +212,35 @@ def load_iter(X, y, batch_size, is_train=True, num_workers=8, weight_sample=Fals
         sampler = torch.utils.data.sampler.WeightedRandomSampler(
             samples_weight, len(samples_weight)
         )
+        if isinstance(X, LazyFeatureArray):
+            dataset = LazyTensorDataset(X, y)
+            return torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=sampler, num_workers=num_workers)
         dataset = torch.utils.data.TensorDataset(X, y)
         return torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=sampler, num_workers=num_workers)
+    if isinstance(X, LazyFeatureArray):
+        dataset = LazyTensorDataset(X, y)
+        return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=is_train, drop_last=is_train, num_workers=num_workers)
     dataset = torch.utils.data.TensorDataset(X, y)
     return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=is_train, drop_last=is_train, num_workers=num_workers)
 
 def extract_temporal_feature(X, feat_length=1000):
-    abs_X = np.absolute(X)
+    # Support both eager numpy arrays and lazy loaders returned by load_data().
+    # The lazy path exposes get_feature(index), so we materialize one sample at
+    # a time instead of forcing the whole dataset into memory.
+    if hasattr(X, "get_feature"):
+        abs_X = None
+    else:
+        abs_X = np.absolute(X)
     new_X = []
 
     for idx in tqdm(range(X.shape[0])):
         temporal_array = np.zeros((2,feat_length))
-        loading_time =  abs_X[idx].max()
+        row = X.get_feature(idx) if hasattr(X, "get_feature") else X[idx]
+        abs_row = np.absolute(row)
+        loading_time = abs_row.max()
         interval = 1.0 * loading_time / feat_length
 
-        for packet in X[idx]:
+        for packet in row:
             if packet == 0:
                 break
             elif packet > 0:
@@ -332,4 +462,3 @@ def extract_TAM(sequences, num_workers=30):
                 pbar.update(1)
 
     return TAM
-

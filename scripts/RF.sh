@@ -1,4 +1,4 @@
-dataset=CW
+dataset=OW
 
 for filename in train valid test
 do 

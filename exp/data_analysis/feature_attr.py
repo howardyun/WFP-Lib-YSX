@@ -39,6 +39,8 @@ parser.add_argument("--seq_len", type=int, default=5000, help="Input sequence le
 # Optimization parameters
 parser.add_argument("--num_workers", type=int, default=10, help="Number of workers for data loader")
 parser.add_argument("--batch_size", type=int, default=256, help="Batch size of training input data")
+parser.add_argument("--bg_samples", type=int, default=2, help="Background samples per class")
+parser.add_argument("--test_samples", type=int, default=10, help="Attribution samples per class")
 
 # Output parameters
 parser.add_argument("--checkpoints", type=str, default="./checkpoints/", help="Directory to save model checkpoints")
@@ -82,7 +84,15 @@ model = eval(f"models.{args.model}")(num_classes)
 model.load_state_dict(torch.load(os.path.join(ckp_path, f"{args.save_name}.pth"), map_location="cpu"))
 
 # Perform feature attribution using the specified method
-attr_values = analyzer.feature_attr(model, args.attr_method, valid_X, valid_y, num_classes)
+attr_values = analyzer.feature_attr(
+    model,
+    args.attr_method,
+    valid_X,
+    valid_y,
+    num_classes,
+    bg_samples=args.bg_samples,
+    test_samples=args.test_samples,
+)
 
 # Print the shape of the attribution values
 print("shape of attr_values:", attr_values.shape)

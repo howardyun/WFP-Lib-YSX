@@ -28,6 +28,8 @@ parser.add_argument("--scenario", type=str, default="Closed-world",
                     help="Attack scenario, options=[Closed-world, Open-world]")
 
 # Input parameters
+parser.add_argument("--data_root", type=str, default="./datasets", help="Root directory of test datasets")
+parser.add_argument("--data_dataset", type=str, default=None, help="Dataset path used for loading test data")
 parser.add_argument("--valid_file", type=str, default="valid", help="Valid file")
 parser.add_argument("--test_file", type=str, default="test", help="Test file")
 parser.add_argument("--feature", type=str, default="DIR", help="Feature type, options=[DIR, DT, DT2, TAM, TAF]")
@@ -42,6 +44,8 @@ parser.add_argument("--eval_method", type=str, default="common", help="Method us
 parser.add_argument('--eval_metrics', nargs='+', required=True, type=str, 
                     help="Evaluation metrics, options=[Accuracy, Precision, Recall, F1-score, P@min, r-Precision]")
 parser.add_argument("--log_path", type=str, default="./logs/", help="Log path")
+parser.add_argument("--result_root", type=str, default=None, help="Root directory to save test results")
+parser.add_argument("--result_dataset", type=str, default=None, help="Dataset path used for saving test results")
 parser.add_argument("--checkpoints", type=str, default="./checkpoints/", help="Location of model checkpoints")
 parser.add_argument("--load_name", type=str, default="base", help="Name of the model file")
 parser.add_argument("--result_file", type=str, default="result", help="File to save test results")
@@ -55,10 +59,14 @@ if args.device.startswith("cuda"):
 device = torch.device(args.device)
 
 # Define paths for dataset, logs, and checkpoints
-in_path = os.path.join("./datasets", args.dataset)
+data_dataset = args.data_dataset or args.dataset
+result_dataset = args.result_dataset or data_dataset
+result_root = args.result_root or args.log_path
+
+in_path = os.path.join(args.data_root, data_dataset)
 if not os.path.exists(in_path):
     raise FileNotFoundError(f"The dataset path does not exist: {in_path}")
-log_path = os.path.join(args.log_path, args.dataset, args.model)
+log_path = os.path.join(result_root, result_dataset, args.model)
 ckp_path = os.path.join(args.checkpoints, args.dataset, args.model)
 os.makedirs(log_path, exist_ok=True)
 out_file = os.path.join(log_path, f"{args.result_file}.json")

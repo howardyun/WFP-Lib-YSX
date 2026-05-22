@@ -1,6 +1,6 @@
 #!/bin/bash
 
-dataset=CW
+dataset=OW
 attr_method=DeepLiftShap 
 
 for filename in train valid
@@ -14,7 +14,7 @@ done
 python -u exp/train.py \
   --dataset ${dataset} \
   --model RF \
-  --device cuda:6 \
+  --device cuda:0 \
   --train_file temporal_train \
   --valid_file temporal_valid \
   --feature TAM \
@@ -35,7 +35,9 @@ python -u exp/data_analysis/feature_attr.py \
   --feature TAM \
   --seq_len 1000 \
   --save_name temporal \
-  --attr_method ${attr_method}
+  --attr_method ${attr_method} \
+  --bg_samples 1 \
+  --test_samples 3
 
 
 for filename in train valid
@@ -45,6 +47,14 @@ do
       --model RF \
       --in_file ${filename} \
       --attr_method ${attr_method}
+done
+
+for percent in {20..100..10}
+do
+    python -u exp/dataset_process/gen_test_prefix.py \
+      --dataset ${dataset} \
+      --in_file test \
+      --percent ${percent}
 done
 
 for filename in aug_train aug_valid test
@@ -58,7 +68,7 @@ done
 python -u exp/train.py \
   --dataset ${dataset} \
   --model Holmes \
-  --device cuda:6 \
+  --device cuda:0 \
   --train_file taf_aug_train \
   --valid_file taf_aug_valid \
   --feature TAF \
@@ -75,7 +85,7 @@ python -u exp/train.py \
 python -u exp/data_analysis/spatial_analysis.py \
   --dataset ${dataset} \
   --model Holmes \
-  --device cuda:6 \
+  --device cuda:0 \
   --valid_file taf_aug_valid \
   --feature TAF \
   --seq_len 2000 \
@@ -92,7 +102,7 @@ do
     python -u exp/test.py \
     --dataset ${dataset} \
     --model Holmes \
-    --device cuda:6 \
+    --device cuda:0 \
     --valid_file taf_aug_valid \
     --test_file taf_test_p${percent} \
     --feature TAF \
