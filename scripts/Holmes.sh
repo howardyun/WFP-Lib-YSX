@@ -1,6 +1,6 @@
 #!/bin/bash
 
-dataset=OW
+dataset=CW
 attr_method=DeepLiftShap 
 
 for filename in train valid

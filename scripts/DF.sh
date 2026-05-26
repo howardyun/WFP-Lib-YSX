@@ -3,7 +3,7 @@ dataset=CW
 python -u exp/train.py \
   --dataset ${dataset} \
   --model DF \
-  --device cuda:1 \
+  --device cuda:0 \
   --feature DIR \
   --seq_len 5000 \
   --train_epochs 30 \
@@ -17,7 +17,7 @@ python -u exp/train.py \
 python -u exp/test.py \
   --dataset ${dataset} \
   --model DF \
-  --device cuda:1 \
+  --device cuda:0 \
   --feature DIR \
   --seq_len 5000 \
   --batch_size 256 \

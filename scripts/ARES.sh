@@ -11,7 +11,7 @@ for filename in train valid test
 python -u exp/train.py \
   --dataset ${dataset} \
   --model ARES \
-  --device cuda:7 \
+  --device cuda:0 \
   --train_file mtaf_train \
   --valid_file mtaf_valid \
   --feature MTAF \
@@ -28,7 +28,7 @@ python -u exp/train.py \
 python -u exp/test.py \
   --dataset ${dataset} \
   --model ARES \
-  --device cuda:7 \
+  --device cuda:0 \
   --valid_file mtaf_valid \
   --test_file mtaf_test  \
   --feature MTAF \

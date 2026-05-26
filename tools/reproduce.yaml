@@ -1,0 +1,62 @@
+project: "WFP-Lib-YSX"
+
+environment:
+  cuda_check: "python cuda-test.py"
+  notes:
+    - "这是一个复现他人科研代码的项目。"
+    - "除非有明确证据表明源码存在实现错误，否则不要修改原始算法逻辑。"
+    - "优先修复依赖、路径、环境变量、数据集和 checkpoint 问题，再考虑修改源码。"
+
+commands:
+  - name: "cuda_check"
+    command: "python cuda-test.py"
+    timeout: 120
+
+  - name: "AWF"
+    command: "bash scripts/AWF.sh"
+    timeout: 7200
+
+  - name: "DF"
+    command: "bash scripts/DF.sh"
+    timeout: 7200
+
+  - name: "RF"
+    command: "bash scripts/RF.sh"
+    timeout: 7200
+
+  - name: "Var-CN"
+    command: "bash scripts/Var-CN.sh"
+    timeout: 7200
+
+  - name: "ARES"
+    command: "bash scripts/ARES.sh"
+    timeout: 7200
+
+  - name: "BAPM"
+    command: "bash scripts/BAPM.sh"
+    timeout: 7200
+
+  - name: "Holmes"
+    command: "bash scripts/Holmes.sh"
+    timeout: 7200
+
+  - name: "NetCLR"
+    command: "bash scripts/NetCLR.sh"
+    timeout: 7200
+
+  - name: "TF"
+    command: "bash scripts/TF.sh"
+    timeout: 7200
+
+  - name: "Tik-Tok"
+    command: "bash scripts/Tik-Tok.sh"
+    timeout: 7200
+
+  - name: "TMWF"
+    command: "bash scripts/TMWF.sh"
+    timeout: 7200
+
+expected_dirs:
+  - "logs"
+  - "exp"
+  - "figures"
